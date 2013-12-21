@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>スイッチングハブの実装 &mdash; Ryu book 0.1 ドキュメント</title>
+    <title>スイッチングハブ &mdash; Ryubook 1.0 ドキュメント</title>
     
     <link rel="stylesheet" href="_static/default.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -14,7 +14,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '0.1',
+        VERSION:     '1.0',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true
@@ -24,7 +24,7 @@
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <script type="text/javascript" src="_static/translations.js"></script>
-    <link rel="top" title="Ryu book 0.1 ドキュメント" href="index.html" />
+    <link rel="top" title="Ryubook 1.0 ドキュメント" href="index.html" />
     <link rel="next" title="トラフィックモニター" href="traffic_monitor.html" />
     <link rel="prev" title="はじめに" href="preface.html" /> 
   </head>
@@ -41,7 +41,7 @@
         <li class="right" >
           <a href="preface.html" title="はじめに"
              accesskey="P">前へ</a> |</li>
-        <li><a href="index.html">Ryu book 0.1 ドキュメント</a> &raquo;</li> 
+        <li><a href="index.html">Ryubook 1.0 ドキュメント</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -51,49 +51,46 @@
           <div class="body">
             
   <div class="section" id="ch-switching-hub">
-<span id="id1"></span><h1>スイッチングハブの実装<a class="headerlink" href="#ch-switching-hub" title="このヘッドラインへのパーマリンク">¶</a></h1>
-<p>本章では、簡単なスイッチングハブの実装を題材として、RyuによるOpenFlowコントローラの実装方法を解説していきます。</p>
+<span id="id1"></span><h1>スイッチングハブ<a class="headerlink" href="#ch-switching-hub" title="このヘッドラインへのパーマリンク">¶</a></h1>
+<p>本章では、簡単なスイッチングハブの実装を題材として、Ryuによるアプリケーションの実装方法を解説していきます。</p>
 <div class="section" id="id2">
 <h2>スイッチングハブ<a class="headerlink" href="#id2" title="このヘッドラインへのパーマリンク">¶</a></h2>
-<p>世の中には様々な機能を持つスイッチングハブがありますが、ここでは一番単純な、必要最低限の機能を持ったスイッチングハブの実装をみてみます。</p>
-<p>スイッチングハブの機能は次のようなものとします。</p>
+<p>世の中には様々な機能を持つスイッチングハブがありますが、ここでは次のような単純な機能を持ったスイッチングハブの実装を見てみます。</p>
 <ul class="simple">
 <li>ポートに接続されているホストのMACアドレスを学習し、MACアドレステーブルに保持する</li>
-<li>受信パケットの宛先ホストが接続されているポートへ、パケットを転送する</li>
-<li>未知の宛先ホストへのパケットは、フラッディングする</li>
+<li>学習済みのホスト宛のパケットを受信したら、ホストの接続されているポートに転送する</li>
+<li>未知のホスト宛のパケットを受信したら、フラッディングする</li>
 </ul>
-<p>これらの機能をOpenFlowで実現します。</p>
+<p>このようなスイッチをRyuを使って実現してみましょう。</p>
 </div>
 <div class="section" id="openflow">
 <h2>OpenFlowによるスイッチングハブ<a class="headerlink" href="#openflow" title="このヘッドラインへのパーマリンク">¶</a></h2>
-<p>コントローラは、OpenFlowスイッチがパケット受信時に発行するPacket-Inメッセージから、ポートに接続されているホストのMACアドレスを学習します。</p>
-<p>OpenFlow 1.3では、OpenFlowスイッチにPacket-Inを発行させるために、Table-missフローエントリという特別なエントリをフローテーブルに追加する必要があります。</p>
-<p>Table-missフローエントリは、優先度が最低(0)で、すべてのパケットにマッチするエントリです。このエントリのインストラクションにコントローラポートへの出力アクションを指定することで、受信パケットが、すべての通常のフローエントリにマッチしなかった場合、Packet-Inを発行するようになります。</p>
-<div class="admonition note">
-<p class="first admonition-title">ノート</p>
-<p class="last">現時点のOpen vSwitchでは、まだOpenFlow 1.3への対応が不完全であり、OpenFlow 1.3以前と同様にデフォルトでPacket-Inが発行されます。また、Table-missフローエントリにも現時点では未対応で、通常のフローエントリとして扱われます。</p>
-</div>
-<p>コントローラは、受信したPacket-Inメッセージから、パケットの受信ポートと送信元MACアドレスを得て、MACアドレステーブルを更新します。</p>
-<p>また、宛先MACアドレスをMACアドレステーブルから検索し、見つかった場合は対応するポートへ転送するようPacket-OutメッセージをOpenFlowスイッチに発行します。</p>
-<p>さらに、対応するModify Flow Entry(Flow Mod)メッセージを発行し、OpenFlowスイッチにフローエントリを設定することで、同一条件のパケットについては、Packet-Inメッセージを発行せずにパケット転送するようにします。</p>
-<p>宛先MACアドレスがMACアドレステーブルに存在しないアドレスだった場合は、フラッディングを指定したPacket-Outメッセージを発行します。</p>
-<div class="admonition hint">
-<p class="first admonition-title">ヒント</p>
-<p class="last">OpenFlowでは、NORMALポートという論理的な出力ポートがオプションで規定されており、出力ポートにNORMALを指定すると、スイッチのL2/L3機能を使ってパケットを処理するようになります。つまり、すべてのパケットをNORMALポートに出力するように指示するだけで、スイッチングハブとして動作するようにできます(スイッチがNORMALポートをサポートしている場合)が、ここでは各々の処理をOpenFlowを使って実現するものとします。</p>
-</div>
-<p>これらの動作を順を追って図とともに説明します。なお、ここではTable-missフローエントリについては省略しています。</p>
+<p>OpenFlowスイッチは、Ryuの様なOpenFlowコントローラからの指示を受けて、次のようなことを行えます。</p>
+<ul class="simple">
+<li>受信したパケットのアドレスを書き換えたり、指定のポートから転送</li>
+<li>受信したパケットをコントローラへ転送(Packet-In)</li>
+<li>コントローラから転送されたパケットを指定のポートから転送(Packet-Out)</li>
+</ul>
+<p>これらの機能を組み合わせ、スイッチングハブを実現することが出来ます。</p>
+<p>まずは、Packet-Inの機能を利用したMACアドレスの学習です。コントローラは、Packet-Inの機能を利用し、スイッチからパケットを受け取る事が出来ます。受け取ったパケットを解析し、ホストのMACアドレスや接続されているポートの情報を学習することが出来ます。</p>
+<p>学習の後は受信したパケットの転送です。パケットの宛先MACアドレスが学習済みのホストのものか検索します。検索結果によって次の処理を実行します。</p>
+<ul class="simple">
+<li>学習済みのホストの場合…Packet-Outの機能で、接続先のポートからパケットを転送</li>
+<li>未知のホストの場合…Packet-Outの機能でパケットをフラッディング</li>
+</ul>
+<p>これらの動作を順を追って図とともに説明します。</p>
 <ol class="arabic">
 <li><p class="first">初期状態</p>
 <blockquote>
 <div><p>フローテーブルが空の初期状態です。</p>
 <p>ポート1にホストA、ポート4にホストB、ポート3にホストCが接続されているものとします。</p>
-<a class="reference internal image-reference" href="_images/fig15.png"><img alt="_images/fig15.png" src="_images/fig15.png" /></a>
+<img alt="_images/fig15.png" class="align-center" src="_images/fig15.png" />
 </div></blockquote>
 </li>
 <li><p class="first">ホストA→ホストB</p>
 <blockquote>
 <div><p>ホストAからホストBへのパケットが送信されると、Packet-Inメッセージが送られ、ホストAのMACアドレスがポート1に学習されます。ホストBのポートはまだ分かっていないため、パケットはフラッディングされ、パケットはホストBとホストCで受信されます。</p>
-<a class="reference internal image-reference" href="_images/fig25.png"><img alt="_images/fig25.png" src="_images/fig25.png" /></a>
+<img alt="_images/fig24.png" class="align-center" src="_images/fig24.png" />
 <p>Packet-In:</p>
 <div class="highlight-python"><pre>in-port: 1
 eth-dst: ホストB
@@ -107,7 +104,7 @@ eth-src: ホストA</pre>
 <li><p class="first">ホストB→ホストA</p>
 <blockquote>
 <div><p>ホストBからホストAにパケットが返されると、フローテーブルにエントリを追加し、またパケットはポート1に転送されます。そのため、このパケットはホストCでは受信されません。</p>
-<a class="reference internal image-reference" href="_images/fig34.png"><img alt="_images/fig34.png" src="_images/fig34.png" /></a>
+<img alt="_images/fig33.png" class="align-center" src="_images/fig33.png" />
 <p>Packet-In:</p>
 <div class="highlight-python"><pre>in-port: 4
 eth-dst: ホストA
@@ -121,7 +118,7 @@ eth-src: ホストB</pre>
 <li><p class="first">ホストA→ホストB</p>
 <blockquote>
 <div><p>再度、ホストAからホストBへのパケットが送信されると、フローテーブルにエントリを追加し、またパケットはポート4に転送されます。</p>
-<a class="reference internal image-reference" href="_images/fig44.png"><img alt="_images/fig44.png" src="_images/fig44.png" /></a>
+<img alt="_images/fig43.png" class="align-center" src="_images/fig43.png" />
 <p>Packet-In:</p>
 <div class="highlight-python"><pre>in-port: 1
 eth-dst: ホストB
@@ -142,22 +139,7 @@ eth-src: ホストA</pre>
 <div>ryu/app/simple_switch_13.py</div></blockquote>
 <p>OpenFlowのバージョンに応じて、他にもsimple_switch.py(OpenFlow 1.0)、simple_switch_12.py(OpenFlow 1.2)がありますが、ここではOpenFlow 1.3に対応した実装を見ていきます。</p>
 <p>短いソースコードなので、全体をここに掲載します。</p>
-<div class="sourcecode highlight-python"><div class="highlight"><pre><span class="c"># Copyright (C) 2011 Nippon Telegraph and Telephone Corporation.</span>
-<span class="c">#</span>
-<span class="c"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
-<span class="c"># you may not use this file except in compliance with the License.</span>
-<span class="c"># You may obtain a copy of the License at</span>
-<span class="c">#</span>
-<span class="c">#    http://www.apache.org/licenses/LICENSE-2.0</span>
-<span class="c">#</span>
-<span class="c"># Unless required by applicable law or agreed to in writing, software</span>
-<span class="c"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
-<span class="c"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or</span>
-<span class="c"># implied.</span>
-<span class="c"># See the License for the specific language governing permissions and</span>
-<span class="c"># limitations under the License.</span>
-
-<span class="kn">from</span> <span class="nn">ryu.base</span> <span class="kn">import</span> <span class="n">app_manager</span>
+<div class="sourcecode highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">ryu.base</span> <span class="kn">import</span> <span class="n">app_manager</span>
 <span class="kn">from</span> <span class="nn">ryu.controller</span> <span class="kn">import</span> <span class="n">ofp_event</span>
 <span class="kn">from</span> <span class="nn">ryu.controller.handler</span> <span class="kn">import</span> <span class="n">CONFIG_DISPATCHER</span><span class="p">,</span> <span class="n">MAIN_DISPATCHER</span>
 <span class="kn">from</span> <span class="nn">ryu.controller.handler</span> <span class="kn">import</span> <span class="n">set_ev_cls</span>
@@ -267,7 +249,7 @@ eth-src: ホストA</pre>
 <p>Ryuでは、OpenFlowメッセージを受信するとメッセージに対応したイベントが発生します。Ryuアプリケーションは、受け取りたいメッセージに対応したイベントハンドラを実装します。</p>
 <p>イベントハンドラは、引数にイベントオブジェクトを持つ関数を定義し、<tt class="docutils literal"><span class="pre">ryu.controller.handler.set_ev_cls</span></tt>デコレータで修飾します。</p>
 <p>set_ev_clsは、引数に受け取るメッセージに対応したイベントクラスとOpenFlowスイッチのステートを指定します。</p>
-<p>イベントクラス名は、<tt class="docutils literal"><span class="pre">ryu.controller.ofp_event.EventOFP</span></tt>+ &lt;OpenFlowメッセージ名&gt;となっています。例えば、Packet-Inメッセージの場合は、<tt class="docutils literal"><span class="pre">EventOFPPacketIn</span></tt>になります。詳しくは、Ryuのドキュメント<em>Ryu application API</em>を参照してください。ステートには、以下のいずれか、またはリストを指定します。</p>
+<p>イベントクラス名は、<tt class="docutils literal"><span class="pre">ryu.controller.ofp_event.EventOFP</span></tt>+ &lt;OpenFlowメッセージ名&gt;となっています。例えば、Packet-Inメッセージの場合は、<tt class="docutils literal"><span class="pre">EventOFPPacketIn</span></tt>になります。詳しくは、Ryuのドキュメント<a class="reference external" href="http://ryu.readthedocs.org/en/latest/">APIリファレンス</a>を参照してください。ステートには、以下のいずれか、またはリストを指定します。</p>
 <table border="1" class="docutils">
 <colgroup>
 <col width="56%" />
@@ -328,14 +310,16 @@ eth-src: ホストA</pre>
 <td><p class="first">使用しているOpenFlowバージョンに対応したofprotoモジュールを示します。現時点では、以下のいずれかになります。</p>
 <p><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_0</span></tt></p>
 <p><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_2</span></tt></p>
-<p class="last"><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_3</span></tt></p>
+<p><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_3</span></tt></p>
+<p class="last"><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_4</span></tt></p>
 </td>
 </tr>
 <tr class="row-even"><td>ofproto_parser</td>
 <td><p class="first">ofprotoと同様に、ofproto_parserモジュールを示します。現時点では、以下のいずれかになります。</p>
 <p><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_0_parser</span></tt></p>
 <p><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_2_parser</span></tt></p>
-<p class="last"><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_3_parser</span></tt></p>
+<p><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_3_parser</span></tt></p>
+<p class="last"><tt class="docutils literal"><span class="pre">ryu.ofproto.ofproto_v1_4_parser</span></tt></p>
 </td>
 </tr>
 </tbody>
@@ -361,14 +345,22 @@ eth-src: ホストA</pre>
     <span class="bp">self</span><span class="o">.</span><span class="n">add_flow</span><span class="p">(</span><span class="n">datapath</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">match</span><span class="p">,</span> <span class="n">actions</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Table-missフローエントリを作成します。</p>
+<p>Table-missフローエントリは、優先度が最低(0)で、すべてのパケットにマッチするエントリです。このエントリのインストラクションにコントローラポートへの出力アクションを指定することで、受信パケットが、すべての通常のフローエントリにマッチしなかった場合、Packet-Inを発行するようになります。</p>
+<div class="admonition note">
+<p class="first admonition-title">ノート</p>
+<p class="last">2014年1月現在のOpen vSwitchは、OpenFlow 1.3への対応が不完全であり、OpenFlow 1.3以前と同様にデフォルトでPacket-Inが発行されます。また、Table-missフローエントリにも現時点では未対応で、通常のフローエントリとして扱われます。</p>
+</div>
 <p>すべてのパケットにマッチさせるため、空のマッチを生成します。マッチは<tt class="docutils literal"><span class="pre">OFPMatch</span></tt>クラスで表されます。</p>
 <p>次に、コントローラポートへ転送するためのOUTPUTアクションクラス(<tt class="docutils literal"><span class="pre">OFPActionOutput</span></tt>)のインスタンスを生成します。出力先にコントローラ、パケット全体をコントローラに送信するためにmax_lenには<tt class="docutils literal"><span class="pre">OFPCML_NO_BUFFER</span></tt>を指定しています。</p>
+<div class="admonition note">
+<p class="first admonition-title">ノート</p>
+<p class="last">コントローラにはパケットの先頭部分(Ethernetヘッダー分)だけを送信させ、残りはスイッチにバッファーさせた方が効率の点では望ましいのですが、Open vSwitchのバグを回避するために、ここではパケット全体を送信させます。このバグはOpen vSwitch 2.1.0で修正されました。</p>
+</div>
 <p>最後に、優先度に0(最低)を指定して<tt class="docutils literal"><span class="pre">add_flow()</span></tt>メソッドを実行してFlow Modメッセージを送信します。add_flow()メソッドの内容については後述します。</p>
 </div>
 <div class="section" id="packet-in">
 <h4>Packet-inメッセージ<a class="headerlink" href="#packet-in" title="このヘッドラインへのパーマリンク">¶</a></h4>
-<p>未知の受信パケットを受け付けるため、Packet-Inメッセージを受け取ります。</p>
+<p>未知の宛先の受信パケットを受け付けるため、Packet-Inイベントのハンドラを作成します。</p>
 <div class="sourcecode highlight-python"><div class="highlight"><pre><span class="nd">@set_ev_cls</span><span class="p">(</span><span class="n">ofp_event</span><span class="o">.</span><span class="n">EventOFPPacketIn</span><span class="p">,</span> <span class="n">MAIN_DISPATCHER</span><span class="p">)</span>
 <span class="k">def</span> <span class="nf">_packet_in_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
     <span class="n">msg</span> <span class="o">=</span> <span class="n">ev</span><span class="o">.</span><span class="n">msg</span>
@@ -455,13 +447,17 @@ eth-src: ホストA</pre>
     <span class="c"># ...</span>
 </pre></div>
 </div>
-<p>宛先MACアドレスがみつかった場合は、OpenFlowスイッチのフローテーブルにエントリを追加します。</p>
+<p>宛先MACアドレスが見つかった場合は、OpenFlowスイッチのフローテーブルにエントリを追加します。</p>
 <p>Table-missフローエントリの追加と同様に、マッチとアクションを指定してadd_flow()を実行し、フローエントリを追加します。</p>
 <p>Table-missフローエントリとは違って、今回はマッチに条件を設定します。今回のスイッチングハブの実装では、受信ポート(in_port)と宛先MACアドレス(eth_dst)を指定しています。例えば、「ポート1で受信したホストB宛」のパケットが対象となります。</p>
-<p>今回のフローエントリでは、優先度に1を指定しています。優先度は値が大きいほど優先度が高くなるので、ここで追加するフローエントリは、Table-missフローエントリより先に評価されるようになります。</p>
+<p>今回のフローエントリでは、優先度に1を指定しています。値が大きいほど優先度が高くなるので、ここで追加するフローエントリは、Table-missフローエントリより先に評価されるようになります。</p>
 <p>前述のアクションを含めてまとめると、以下のようなエントリをフローテーブルに追加します。</p>
 <blockquote>
 <div>ポート1で受信した、ホストB宛(宛先MACアドレスがB)のパケットを、ポート4に転送する</div></blockquote>
+<div class="admonition hint">
+<p class="first admonition-title">ヒント</p>
+<p class="last">OpenFlowでは、NORMALポートという論理的な出力ポートがオプションで規定されており、出力ポートにNORMALを指定すると、スイッチのL2/L3機能を使ってパケットを処理するようになります。つまり、すべてのパケットをNORMALポートに出力するように指示するだけで、スイッチングハブとして動作するようにできますが、ここでは各々の処理をOpenFlowを使って実現するものとします。</p>
+</div>
 </div>
 <div class="section" id="id6">
 <h4>フローエントリの追加処理<a class="headerlink" href="#id6" title="このヘッドラインへのパーマリンク">¶</a></h4>
@@ -528,7 +524,7 @@ eth-src: ホストA</pre>
 <td>フローエントリを削除します</td>
 </tr>
 <tr class="row-even"><td>OFPFC_DELETE_STRICT</td>
-<td>厳格に一致するフローエントリを更新します</td>
+<td>厳格に一致するフローエントリを削除します</td>
 </tr>
 </tbody>
 </table>
@@ -669,7 +665,7 @@ eth-src: ホストA</pre>
 <div class="section" id="mininet">
 <h3>Mininetの実行<a class="headerlink" href="#mininet" title="このヘッドラインへのパーマリンク">¶</a></h3>
 <p>mininetからxtermを起動するため、Xが使える環境が必要です。</p>
-<p>ここでは、OpenFlow TutorialのVMを利用しているため、デスクトップPCからsshでX11 Forwardingを有効にしてログインします。</p>
+<p>ここでは、OpenFlow TutorialのVMを利用しているため、sshでX11 Forwardingを有効にしてログインします。</p>
 <blockquote>
 <div><div class="highlight-python"><pre>$ ssh -X ryu@&lt;VMのアドレス&gt;</pre>
 </div>
@@ -948,7 +944,7 @@ listening on h3-eth0, link-type EN10MB (Ethernet), capture size 65535 bytes
         <div class="sphinxsidebarwrapper">
   <h3><a href="index.html">目次</a></h3>
   <ul>
-<li><a class="reference internal" href="#">スイッチングハブの実装</a><ul>
+<li><a class="reference internal" href="#">スイッチングハブ</a><ul>
 <li><a class="reference internal" href="#id2">スイッチングハブ</a></li>
 <li><a class="reference internal" href="#openflow">OpenFlowによるスイッチングハブ</a></li>
 <li><a class="reference internal" href="#ryu">Ryuによるスイッチングハブの実装</a><ul>
@@ -1015,12 +1011,11 @@ listening on h3-eth0, link-type EN10MB (Ethernet), capture size 65535 bytes
         <li class="right" >
           <a href="preface.html" title="はじめに"
              >前へ</a> |</li>
-        <li><a href="index.html">Ryu book 0.1 ドキュメント</a> &raquo;</li> 
+        <li><a href="index.html">Ryubook 1.0 ドキュメント</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
-        &copy; Copyright 2013, Ryuプロジェクト.
-      このドキュメントは <a href="http://sphinx-doc.org/">Sphinx</a> 1.2 で生成しました。
+        &copy; Copyright 2014, RYU project team.
     </div>
   </body>
 </html>

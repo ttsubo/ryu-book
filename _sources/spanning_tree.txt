@@ -1,7 +1,7 @@
 .. _ch_spanning_tree:
 
-スパニングツリーの実装
-======================
+スパニングツリー
+================
 
 本章では、Ryuを用いたスパニングツリーの実装方法を解説していきます。
 
@@ -20,67 +20,70 @@
 
 
 STP(spanning tree protocol：IEEE 802.1D)はネットワークを論理的なツリーとして扱い、
-各ブリッジのポートをフレーム転送可能または不可能な状態に設定することで、
-ループ構造を持つネットワークにおけるブロードキャストストームの発生を抑制します。
+各スイッチ(本章ではブリッジと呼ぶことがあります)のポートをフレーム転送可能または不可能な状態に設定することで、
+ループ構造を持つネットワークでブロードキャストストームの発生を抑制します。
+
 
 .. only:: latex
 
-   +------------------------------------------+------------------------------------------+
-   | .. image:: images/spanning_tree/fig1.eps | .. image:: images/spanning_tree/fig2.eps |
-   +------------------------------------------+------------------------------------------+
+    .. image:: images/spanning_tree/fig1.eps
+        :align: center
 
-.. only:: not latex
+.. only:: epub
 
-   +------------------------------------------+------------------------------------------+
-   | .. image:: images/spanning_tree/fig1.png | .. image:: images/spanning_tree/fig2.png |
-   +------------------------------------------+------------------------------------------+
+    .. image:: images/spanning_tree/fig1.png
+        :align: center
+
+.. only:: not latex and not epub
+
+    .. image:: images/spanning_tree/fig1.png
+        :scale: 50 %
+        :align: center
 
 
 STPではブリッジ間でBPDU(Bridge Protocol Data Unit)パケットを相互に交換
-しブリッジや各ポートの情報を比較することで、論理ツリーの頂点である
-ルートブリッジを決定し、さらに各ブリッジのポートのフレーム転送可否を決定します。
+し、ブリッジやポートの情報を比較しあうことで、
+各ポートのフレーム転送可否を決定します。
 
 具体的には、次のような手順により実現されます。
 
-1. ルートブリッジの選出
+1．ルートブリッジの選出
 
     ブリッジ間のBPDUパケットの交換により、最小のブリッジIDを持つブリッジが
-    ルートブリッジとして選出され、以降はルートブリッジのみがオリジナルの
+    ルートブリッジとして選出されます。以降はルートブリッジのみがオリジナルの
     BPDUパケットを送信し、他のブリッジはルートブリッジから受信したBPDUパケット
     を転送します。
 
-    .. NOTE::
+.. NOTE::
 
-        ブリッジIDは、各ブリッジに設定されたブリッジpriority
-        と特定ポートのMACアドレスの組み合わせで算出されます。
+    ブリッジIDは、各ブリッジに設定されたブリッジpriority
+    と特定ポートのMACアドレスの組み合わせで算出されます。
 
-            ブリッジID
+        ブリッジID
 
-            ================ ===========
-            上位2byte        下位6byte
-            ================ ===========
-            ブリッジpriority MACアドレス
-            ================ ===========
+        ================ ===========
+        上位2byte        下位6byte  
+        ================ ===========
+        ブリッジpriority MACアドレス
+        ================ ===========
 
-        ブリッジpriorityは、RyuのSTPライブラリではコンフィグ設定により
-        変更が可能です。
-
-
-
-2. ポートの役割の決定
+2．ポートの役割の決定
 
     各ポートのルートブリッジに至るまでのコストを元に、ポートの役割を決定します。
 
-    * ルートポート(Root port)：
+    * ルートポート(Root port)
+
         ブリッジ内で最もルートブリッジまでのコストが小さいポート。
         ルートブリッジからのBPDUパケットを受信するポートになります。
 
-    * 指定ポート(Designated port)：
+    * 指定ポート(Designated port)
+
         各リンクのルートブリッジまでのコストが小さい側のポート。
         ルートブリッジから受信したBPDUパケットを送信するポートになります。
         ルートブリッジのポートは全て指定ポートです。
 
-    * 非指定ポート(Non designated port)：
+    * 非指定ポート(Non designated port)
+
         ルートポート・指定ポート以外のポート。
         フレーム転送を抑制するポートです。
 
@@ -88,20 +91,26 @@ STPではブリッジ間でBPDU(Bridge Protocol Data Unit)パケットを相互�
 
         .. only:: latex
 
-           .. image:: images/spanning_tree/fig3.eps
-              :scale: 80 %
+            .. image:: images/spanning_tree/fig2.eps
+                :scale: 80 %
 
-        .. only:: not latex
+.. only:: epub
 
-           .. image:: images/spanning_tree/fig3.png
-              :scale: 80 %
+    .. image:: images/spanning_tree/fig2.png
+        :align: center
+
+.. only:: not latex and not epub
+
+    .. image:: images/spanning_tree/fig2.png
+        :align: center
+        :scale: 50 %
 
 
 
-    .. NOTE::
+.. NOTE::
 
-        ルートブリッジに至るまでのコストは、各ポートが受信したBPDUパケットの
-        設定値から次のように比較されます。
+    ルートブリッジに至るまでのコストは、各ポートが受信したBPDUパケットの
+    設定値から次のように比較されます。
 
         優先1：root path cost値による比較。
 
@@ -113,7 +122,7 @@ STPではブリッジ間でBPDU(Bridge Protocol Data Unit)パケットを相互�
         優先2：root path cost値が同じ場合、対向ブリッジのブリッジIDにより比較。
 
         優先3：対向ブリッジのブリッジIDが同じ場合(各ポートが同一ブリッジに
-        接続しているケース)、対向ポートのポートIDにより比較
+        接続しているケース)、対向ポートのポートIDにより比較。
 
             ポートID
 
@@ -123,11 +132,8 @@ STPではブリッジ間でBPDU(Bridge Protocol Data Unit)パケットを相互�
             ポートpriority ポート番号
             ============== ==========
 
-        ポートのpath cost値やポートpriorityは、RyuのSTPライブラリでは
-        コンフィグ設定により変更が可能です。
 
-
-3. ポートの状態遷移
+3．ポートの状態遷移
 
     ポート役割の決定後(STP計算の完了時)、各ポートはLISTEN状態になります。
     その後、以下に示す状態遷移を行い、最終的に各ポートの役割に従って
@@ -135,31 +141,38 @@ STPではブリッジ間でBPDU(Bridge Protocol Data Unit)パケットを相互�
     されたポートはDISABLE状態となり、以降、状態遷移は行われません。
 
 
+.. only:: latex
 
-            .. only:: latex
+   .. image:: images/spanning_tree/fig3.eps
+        :align: center
 
-               .. image:: images/spanning_tree/fig4.eps
-                  :scale: 50 %
+.. only:: epub
+
+    .. image:: images/spanning_tree/fig3.png
+        :align: center
+
+.. only:: not latex and not epub
+
+    .. image:: images/spanning_tree/fig3.png
+        :align: center
+        :scale: 50 %
 
 
-            .. only:: not latex
+    各ポートは状態に応じてフレーム転送有無などの動作を決定します。
 
-               .. image:: images/spanning_tree/fig4.png
-                  :scale: 50 %
-
-
-    ======= ===========================================
+    ======= =============================================
     状態    動作
-    ======= ===========================================
+    ======= =============================================
     DISABLE 無効ポート。全ての受信パケットを無視します。
     BLOCK   BPDU受信のみ を行います。
     LISTEN  BPDU送受信 を行います。
-    LEARN   BPDU送受信/MAC学習 を行います。
-    FORWARD BPDU送受信/MAC学習/フレーム転送 を行います。
-    ======= ===========================================
+    LEARN   BPDU送受信／MAC学習 を行います。
+    FORWARD BPDU送受信／MAC学習／フレーム転送 を行います。
+    ======= =============================================
 
 
-これらの動作が各ブリッジで実行されることにより、フレーム転送を行うポートと
+
+これらの処理が各ブリッジで実行されることにより、フレーム転送を行うポートと
 フレーム転送を抑制するポートが決定され、ネットワーク内のループが解消されます。
 
 また、リンクダウンやBPDUパケットのmax age(デフォルト20秒)間の未受信
@@ -178,7 +191,7 @@ Ryuアプリケーションの実行
 Ryuのソースツリーに用意されているsimple_switch_stp.pyはOpenFlow 1.0専用
 のアプリケーションであるため、ここでは新たにOpenFlow 1.3に対応した
 simple_switch_stp_13.pyを作成することとします。このプログラムは、
-「 :ref:`ch_switching_hub` 」のスイッチングハブにスパニングツリー機能を
+「 :ref:`ch_switching_hub` 」にスパニングツリー機能を
 追加したアプリケーションです。
 
 
@@ -189,7 +202,41 @@ simple_switch_stp_13.pyを作成することとします。このプログラム
 .. literalinclude:: sources/simple_switch_stp_13.py
 
 
+.. NOTE::
 
+    使用するスイッチがOpen vSwitchの場合、バージョンや設定によっては
+    BPDUが転送されず、本アプリが正常に動作しないことがあります。
+    Open vSwitchではスイッチ自身の機能としてSTPを実装していますが、
+    この機能を無効(デフォルト設定)にしている場合、
+    IEEE 802.1Dで規定されるスパニングツリーのマルチキャストMACアドレス
+    "01:80:c2:00:00:00"を宛先とするパケットを転送しないためです。
+    本アプリを動作させる際は、下記のようなソース修正を行うことで、
+    この制約を回避できます。
+
+    ryu/ryu/lib/packet/bpdu.py:
+
+    .. rst-class:: sourcecode
+
+    ::
+
+        # BPDU destination
+        #BRIDGE_GROUP_ADDRESS = '01:80:c2:00:00:00'
+        BRIDGE_GROUP_ADDRESS = '01:80:c2:00:00:0e'
+
+    なお、ソース修正後は変更を反映させるため、下記のコマンドを実行してください。
+
+    .. rst-class:: console
+
+    ::
+
+        $ cd ryu
+        $ sudo python setup.py install
+        running install
+        ...
+        ...
+        running install_scripts
+        Installing ryu-manager script to /usr/local/bin
+        Installing ryu script to /usr/local/bin
 
 
 実験環境の構築
@@ -216,16 +263,22 @@ VM環境でこのプログラムを実行することにより、スイッチs1�
 
 
 
-        .. only:: latex
+.. only:: latex
 
-           .. image:: images/spanning_tree/fig5.eps
-              :scale: 80 %
+    .. image:: images/spanning_tree/fig4.eps
+        :scale: 70 %
+        :align: center
 
+.. only:: epub
 
-        .. only:: not latex
+    .. image:: images/spanning_tree/fig4.png
+        :align: center
 
-           .. image:: images/spanning_tree/fig5.png
-              :scale: 80 %
+.. only:: not latex and not epub
+
+    .. image:: images/spanning_tree/fig4.png
+        :align: center
+        :scale: 50 %
 
 
 
@@ -410,24 +463,29 @@ OpenFlowスイッチ起動時のSTP計算
 
 
 
-        .. only:: latex
+.. only:: latex
 
-                   .. image:: images/spanning_tree/fig6.eps
-                      :scale: 80 %
+    .. image:: images/spanning_tree/fig5.eps
+        :scale: 70 %
+        :align: center
 
+.. only:: epub
 
-        .. only:: not latex
+    .. image:: images/spanning_tree/fig5.png
+        :align: center
 
-                   .. image:: images/spanning_tree/fig6.png
-                      :scale: 80 %
+.. only:: not latex and not epub
 
+    .. image:: images/spanning_tree/fig5.png
+        :align: center
+        :scale: 50 %
 
 
 
 パケットがループしないことを確認するため、ホスト1からホスト2へpingを実行します。
 
-pingコマンドを実行する前に、各スイッチでパケットがループしていないことを
-確認できるようにtcpdumpコマンドを実行しておきます。
+pingコマンドを実行する前に、
+tcpdumpコマンドを実行しておきます。
 
 
 
@@ -485,7 +543,7 @@ Node: s3:
     rtt min/avg/max/mdev = 0.041/7.784/84.407/24.230 ms
 
 
-各スイッチで実行したtcpdumpの出力結果から、ARPがループしていないことが
+tcpdumpの出力結果から、ARPがループしていないことが
 確認できます。
 
 
@@ -611,16 +669,22 @@ Node: s2:
 再びフレーム転送可能な状態となったことが確認できます。
 
 
-        .. only:: latex
+.. only:: latex
 
-           .. image:: images/spanning_tree/fig7.eps
-              :scale: 80 %
+    .. image:: images/spanning_tree/fig6.eps
+        :scale: 70 %
+        :align: center
 
+.. only:: epub
 
-        .. only:: not latex
+    .. image:: images/spanning_tree/fig6.png
+        :align: center
 
-           .. image:: images/spanning_tree/fig7.png
-              :scale: 80 %
+.. only:: not latex and not epub
+
+    .. image:: images/spanning_tree/fig6.png
+        :align: center
+        :scale: 50 %
 
 
 
@@ -698,20 +762,26 @@ Node: s2:
     [STP][INFO] dpid=0000000000000003: [port=3] ROOT_PORT           / FORWARD
 
 
-OpenFlowスイッチの初回起動時と同様のツリー構成となり、再びフレーム転送可能
+アプリケーション起動時と同様のツリー構成となり、再びフレーム転送可能
 な状態となったことが確認できます。
 
 
-        .. only:: latex
+.. only:: latex
 
-           .. image:: images/spanning_tree/fig8.eps
-              :scale: 80 %
+    .. image:: images/spanning_tree/fig7.eps
+        :scale: 70 %
+        :align: center
 
+.. only:: epub
 
-        .. only:: not latex
+    .. image:: images/spanning_tree/fig7.png
+        :align: center
 
-           .. image:: images/spanning_tree/fig8.png
-              :scale: 80 %
+.. only:: not latex and not epub
+
+    .. image:: images/spanning_tree/fig7.png
+        :align: center
+        :scale: 50 %
 
 
 
@@ -721,8 +791,8 @@ OpenFlowによるスパニングツリー
 Ryuのスパニングツリーアプリケーションにおいて、OpenFlowを用いてどのように
 スパニングツリーの機能を実現しているかを見ていきます。
 
-OpenFlow 1.3には次のようなポートの動作を設定するコンフィグが用意されているため、
-各ポートの状態に応じてPort ModificationメッセージをOpenFlowスイッチに発行
+OpenFlow 1.3には次のようなポートの動作を設定するコンフィグが用意されています。
+Port ModificationメッセージをOpenFlowスイッチに発行
 することで、ポートのフレーム転送有無などの動作を制御することができます。
 
 ================== =========================================================
@@ -749,10 +819,10 @@ MACアドレス学習(BPDU以外のパケット受信)、フレーム転送(BPDU
 ======= ================ ============================
 状態    ポートコンフィグ フローエントリ
 ======= ================ ============================
-DISABLE NO_RECV/ NO_FWD  設定無し
-BLOCK   NO_FWD           BPDU Packet-In/ BPDU以外drop
-LISTEN  設定無し         BPDU Packet-In/ BPDU以外drop
-LEARN   設定無し         BPDU Packet-In/ BPDU以外drop
+DISABLE NO_RECV／NO_FWD  設定無し
+BLOCK   NO_FWD           BPDU Packet-In／BPDU以外drop
+LISTEN  設定無し         BPDU Packet-In／BPDU以外drop
+LEARN   設定無し         BPDU Packet-In／BPDU以外drop
 FORWARD 設定無し         BPDU Packet-In
 ======= ================ ============================
 
@@ -765,7 +835,7 @@ FORWARD 設定無し         BPDU Packet-In
 
 これらの設定に加え、コントローラはOpenFlowスイッチとの接続時に収集した
 ポート情報や各OpenFlowスイッチが受信したBPDUパケットに設定されたルートブリッジ
-の情報を元に送信用のBPDUパケットを構築しPacket-Outメッセージを発行することで、
+の情報を元に、送信用のBPDUパケットを構築しPacket-Outメッセージを発行することで、
 OpenFlowスイッチ間のBPDUパケットの交換を実現します。
 
 
@@ -789,7 +859,7 @@ simple_switch_stp.pyはスパニングツリーライブラリを適用するこ
 
 .. ATTENTION::
 
-    前述の通り、simple_switch_stp.pyはOpenFlow 1.0専用のアプリケーション
+    simple_switch_stp.pyはOpenFlow 1.0専用のアプリケーション
     であるため、本章では「 `Ryuアプリケーションの実行`_ 」に示した
     OpenFlow 1.3に対応したsimple_switch_stp_13.pyを元にアプリケーションの
     詳細を説明します。
@@ -804,67 +874,76 @@ simple_switch_stp.pyはスパニングツリーライブラリを適用するこ
 
 .. only:: latex
 
-   .. image:: images/spanning_tree/fig9.eps
-      :scale: 110 %
+    .. image:: images/spanning_tree/fig8.eps
+        :scale: 80 %
+        :align: center
+
+.. only:: epub
+
+    .. image:: images/spanning_tree/fig8.png
+        :align: center
+
+.. only:: not latex and not epub
+
+    .. image:: images/spanning_tree/fig8.png
+        :scale: 40 %
+        :align: center
 
 
-.. only:: not latex
 
-   .. image:: images/spanning_tree/fig9.png
-      :scale: 110 %
+STPライブラリ(Stpクラスインスタンス)がOpenFlowスイッチのコントローラ
+への接続を検出すると、Bridgeクラスインスタンス・Portクラスインスタンスが
+生成されます。各クラスインスタンスが生成・起動された後は、
 
+* StpクラスインスタンスからのOpenFlowメッセージ受信通知
+* BridgeクラスインスタンスのSTP計算(ルートブリッジ選択・各ポートの役割選択)
+* Portクラスインスタンスのポート状態遷移・BPDUパケット送受信
 
-
-STPライブラリ(Stpクラスオブジェクト)がOpenFlowスイッチのコントローラへの接続を
-検出すると、Bridgeクラスオブジェクト・Portクラスオブジェクトが生成されます。
-各クラスオブジェクトが生成・起動された後は、Stpクラスオブジェクトからの
-OpenFlowメッセージ受信通知、BridgeクラスオブジェクトのSTP計算
-(ルートブリッジ選択・各ポートの役割選択)、Portクラスオブジェクトの
-ポート状態遷移・BPDUパケット送受信が連動し、スパニングツリー機能を実現します。
+が連動し、スパニングツリー機能を実現します。
 
 
 
 コンフィグ設定項目
 """"""""""""""""""
 
-STPライブラリはStp.set_config()メソッドによりブリッジ・ポートの
+STPライブラリは ``Stp.set_config()`` メソッドによりブリッジ・ポートの
 コンフィグ設定IFを提供します。設定可能な項目は以下の通りです。
 
 
 * bridge
 
-    ========== =================================================== ============
-    項目       説明                                                デフォルト値
-    ========== =================================================== ============
-    priority   ブリッジ優先度                                      0x8000
-    sys_ext_id VLAN-IDを設定 (\*現状のSTPライブラリはVLAN未対応)   0
-    max_age    BPDUパケットの受信待ちタイマー値                    20[sec]
-    hello_time BPDUパケットの送信間隔                              2 [sec]
-    fwd_delay  各ポートがLISTEN状態およびLEARN状態に留まる時間     15[sec]
-    ========== =================================================== ============
+    ================ =================================================== ============
+    項目             説明                                                デフォルト値
+    ================ =================================================== ============
+     ``priority``    ブリッジ優先度                                      0x8000
+     ``sys_ext_id``  VLAN-IDを設定 (\*現状のSTPライブラリはVLAN未対応)   0
+     ``max_age``     BPDUパケットの受信待ちタイマー値                    20[sec]
+     ``hello_time``  BPDUパケットの送信間隔                              2 [sec]
+     ``fwd_delay``   各ポートがLISTEN状態およびLEARN状態に留まる時間     15[sec]
+    ================ =================================================== ============
 
 
 * port
 
-    ========= ==================== ============================
-    項目      説明                 デフォルト値
-    ========= ==================== ============================
-    priority  ポート優先度         0x80
-    path_cost リンクのコスト値     リンクスピードを元に自動設定
-    enable    ポートの有効無効設定 True
-    ========= ==================== ============================
+    =============== ==================== ============================
+    項目            説明                 デフォルト値
+    =============== ==================== ============================
+     ``priority``   ポート優先度         0x80
+     ``path_cost``  リンクのコスト値     リンクスピードを元に自動設定
+     ``enable``     ポートの有効無効設定 True
+    =============== ==================== ============================
 
 
 
 BPDUパケット送信
 """"""""""""""""
 
-BPDUパケット送信はPortクラスのBPDUパケット送信スレッド(Port.send_bpdu_thread)
-で行っています。ポート状態がLISTENとなった際にスレッド処理が開始され、
-ポート役割がDESIGNATED_PORTの場合にのみ、ルートブリッジから通知された
-hello time(Port.port_times.hello_time：デフォルト2秒)間隔で
-BPDUパケットの生成(Port._generate_config_bpdu())およびBPDUパケット送信
-(Port.ofctl.send_packet_out())を行います。
+BPDUパケット送信はPortクラスのBPDUパケット送信スレッド
+( ``Port.send_bpdu_thread`` )で行っています。ポートの役割が指定ポート
+( ``DESIGNATED_PORT`` )の場合、ルートブリッジから通知されたhello time
+( ``Port.port_times.hello_time`` ：デフォルト2秒)間隔でBPDUパケット生成
+( ``Port._generate_config_bpdu()`` )およびBPDUパケット送信
+( ``Port.ofctl.send_packet_out()`` )を行います。
 
 
 .. rst-class:: sourcecode
@@ -900,8 +979,9 @@ BPDUパケットの生成(Port._generate_config_bpdu())およびBPDUパケット
 
 
 送信するBPDUパケットは、OpenFlowスイッチのコントローラ接続時に収集した
-ポート情報(Port.ofport)や受信したBPDUパケットに設定された
-ルートブリッジ情報(Port.port_priority、Port.port_times)などを元に構築されます。
+ポート情報( ``Port.ofport`` )や受信したBPDUパケットに設定された
+ルートブリッジ情報( ``Port.port_priority、Port.port_times`` )などを元に
+構築されます。
 
 
 .. rst-class:: sourcecode
@@ -944,16 +1024,15 @@ BPDUパケットの生成(Port._generate_config_bpdu())およびBPDUパケット
 BPDUパケット受信
 """"""""""""""""
 
-BPDUパケットの受信は、StpクラスのPacket-Inイベントハンドラによって
-検出され、Bridgeクラスオブジェクトを経由してPortクラスオブジェクトに
-通知されます。イベントハンドラの実装は「 :ref:`ch_switching_hub` 」を
-参照してください。
+BPDUパケットの受信は、StpクラスのPacket-Inイベントハンドラによって検出され、
+Bridgeクラスインスタンスを経由してPortクラスインスタンスに通知されます。
+イベントハンドラの実装は「 :ref:`ch_switching_hub` 」を参照してください。
 
 BPDUパケットを受信したポートは、以前に受信したBPDUパケットと今回受信した
-BPDUパケットのブリッジIDなどの比較(Stp.compare_bpdu_info())を行い、
-STP再計算の要否判定を行います。以前に受信したBPDUより優れたBPDU(SUPERIOR)を
-受信した場合、「新たなルートブリッジが追加された」などのネットワークトポロジ変更が
-発生したことを意味するため、Bridgeクラスオブジェクトに通知されSTP再計算の契機となります。
+BPDUパケットのブリッジIDなどの比較( ``Stp.compare_bpdu_info()`` )を行い、
+STP再計算の要否判定を行います。以前に受信したBPDUより優れたBPDU( ``SUPERIOR`` )
+を受信した場合、「新たなルートブリッジが追加された」などのネットワーク
+トポロジ変更が発生したことを意味するため、STP再計算の契機となります。
 
 
 .. rst-class:: sourcecode
@@ -998,21 +1077,22 @@ STP再計算の要否判定を行います。以前に受信したBPDUより優�
 リンク断などの直接故障や、一定時間ルートブリッジからのBPDUパケットを
 受信できない間接故障を検出した場合も、STP再計算の契機となります。
 
-リンク断はStpクラスのPortStatusイベントハンドラによって検出し、
-Bridgeクラスオブジェクトへ通知されます。
+リンク断はStpクラスのPortStatusイベントハンドラによって検出し、Bridgeクラス
+インスタンスへ通知されます。
 
 BPDUパケットの受信待ちタイムアウトはPortクラスのBPDUパケット受信待ちスレッド
-(Port.wait_bpdu_thread)で検出します。max age(デフォルト20秒)間、ルートブリッジ
-からのBPDUパケットを受信できない場合に間接故障と判断し、
-Bridgeクラスオブジェクトへ通知されます。
+( ``Port.wait_bpdu_thread`` )で検出します。max age(デフォルト20秒)間、
+ルートブリッジからのBPDUパケットを受信できない場合に間接故障と判断し、
+Bridgeクラスインスタンスへ通知されます。
 
-タイマーの更新とタイムアウトの検出にはhubモジュール(ryu.lib.hub)の
-hub.Eventとhub.Timeoutを用います。hub.Eventはhub.Event.wait()でwait状態に
-入りhub.Event.set()が実行されるまでスレッドが中断されます。hub.Timeoutは
-指定されたタイムアウト時間内にtry節の処理が終了しない場合、hub.Timeout例外
-を発行します。hub.Eventがwait状態に入りhub.Timeoutで指定されたタイムアウト
-時間内にhub.Event.set()が実行されない場合に、BPDUパケットの受信待ち
-タイムアウトと判断しBridgeクラスのSTP再計算処理を呼び出します。
+BPDU受信待ちタイマーの更新とタイムアウトの検出にはhubモジュール(ryu.lib.hub)
+の ``hub.Event`` と ``hub.Timeout`` を用います。 ``hub.Event`` は
+``hub.Event.wait()`` でwait状態に入り ``hub.Event.set()`` が実行されるまで
+スレッドが中断されます。 ``hub.Timeout`` は指定されたタイムアウト時間内に
+``try`` 節の処理が終了しない場合、 ``hub.Timeout`` 例外を発行します。
+``hub.Event`` がwait状態に入り ``hub.Timeout`` で指定されたタイムアウト時間内に
+``hub.Event.set()`` が実行されない場合に、BPDUパケットの受信待ちタイムアウト
+と判断しBridgeクラスのSTP再計算処理を呼び出します。
 
 
 .. rst-class:: sourcecode
@@ -1060,14 +1140,15 @@ hub.Eventとhub.Timeoutを用います。hub.Eventはhub.Event.wait()でwait状�
                 hub.spawn(self.wait_bpdu_timeout)
 
 
-受信したBPDUパケットの比較処理(Stp.compare_bpdu_info())により
-SUPERIORまたはREPEATEDと判定された場合は、ルートブリッジからのBPDUパケット
-が受信出来ていることを意味するため、BPDU受信待ちタイマーの更新
-(Port._update_wait_bpdu_timer())を行います。hub.Eventである
-Port.wait_timer_eventのset()処理によりPort.wait_timer_eventはwait状態から
-解放され、BPDUパケット受信待ちスレッド(Port.wait_bpdu_thread)は
-except hub.Timeout節のタイムアウト処理に入ることなくタイマーをキャンセルし、
-改めてタイマーをセットし直すことで次のBPDUパケットの受信待ちを開始します。
+受信したBPDUパケットの比較処理( ``Stp.compare_bpdu_info()`` )により
+``SUPERIOR`` または ``REPEATED`` と判定された場合は、ルートブリッジからの
+BPDUパケットが受信出来ていることを意味するため、BPDU受信待ちタイマーの更新
+( ``Port._update_wait_bpdu_timer()`` )を行います。 ``hub.Event`` である
+``Port.wait_timer_event`` の ``set()`` 処理により ``Port.wait_timer_event``
+はwait状態から解放され、BPDUパケット受信待ちスレッド( ``Port.wait_bpdu_thread`` )
+は ``except hub.Timeout`` 節のタイムアウト処理に入ることなくタイマーを
+キャンセルし、改めてタイマーをセットし直すことで次のBPDUパケットの受信待ち
+を開始します。
 
 
 .. rst-class:: sourcecode
@@ -1104,11 +1185,12 @@ STP計算(ルートブリッジ選択・各ポートの役割選択)はBridgeク
 
 STP計算が実行されるケースではネットワークトポロジの変更が発生しており
 パケットがループする可能性があるため、一旦全てのポートをBLOCK状態に設定
-(port.down)し、かつトポロジ変更イベント(EventTopologyChange)を上位APLに
-対して通知することで学習済みのMACアドレス情報の初期化を促します。
+( ``port.down`` )し、かつトポロジ変更イベント( ``EventTopologyChange`` )
+を上位APLに対して通知することで学習済みのMACアドレス情報の初期化を促します。
 
-その後、Bridge._spanning_tree_algorithm()でルートブリッジとポートの役割を
-選択した上で、各ポートをLISTEN状態で起動(port.up)しポートの状態遷移を開始します。
+その後、 ``Bridge._spanning_tree_algorithm()`` でルートブリッジとポートの
+役割を選択した上で、各ポートをLISTEN状態で起動( ``port.up`` )しポートの
+状態遷移を開始します。
 
 
 .. rst-class:: sourcecode
@@ -1151,12 +1233,12 @@ STP計算が実行されるケースではネットワークトポロジの変�
 
 ルートブリッジの選出のため、ブリッジIDなどの自身のブリッジ情報と
 各ポートが受信したBPDUパケットに設定された他ブリッジ情報を比較します
-(Bridge._select_root_port)。
+( ``Bridge._select_root_port`` )。
 
 この結果、ルートポートが見つかった場合(自身のブリッジ情報よりもポートが
 受信した他ブリッジ情報が優れていた場合)、他ブリッジがルートブリッジであると
-判断し指定ポートの選出(Bridge._select_designated_port)と非指定ポートの選出
-(ルートポート/指定ポート以外のポートを非指定ポートとして選出)を行います。
+判断し指定ポートの選出( ``Bridge._select_designated_port`` )と非指定ポート
+の選出(ルートポート／指定ポート以外のポートを非指定ポートとして選出)を行います。
 
 一方、ルートポートが見つからなかった場合(自身のブリッジ情報が最も優れていた場合)は
 自身をルートブリッジと判断し各ポートは全て指定ポートとなります。
@@ -1214,13 +1296,13 @@ STP計算が実行されるケースではネットワークトポロジの変�
 ポート状態遷移
 """"""""""""""
 
-ポートの状態遷移処理は、Portクラスの状態遷移制御スレッド(Port.state_machine)
-で実行しています。次の状態に遷移するまでのタイマーをPort._get_timer()で
-取得し、タイマー満了後にPort._get_next_state()で次状態を取得し、状態遷移を
-行います。また、STP再計算が発生しこれまでのポート状態に関係無くBLOCK状態に
-遷移させるケースなど、Port._change_status()が実行された場合にも状態遷移が
-行われます。これらの処理は「 `故障検出`_ 」と同様に
-hubモジュールのhub.Eventとhub.Timeoutを用いて実現しています。
+ポートの状態遷移処理は、Portクラスの状態遷移制御スレッド( ``Port.state_machine`` )
+で実行しています。次の状態に遷移するまでのタイマーを ``Port._get_timer()`` で
+取得し、タイマー満了後に ``Port._get_next_state()`` で次状態を取得し、
+状態遷移を行います。また、STP再計算が発生しこれまでのポート状態に関係無く
+BLOCK状態に遷移させるケースなど、 ``Port._change_status()`` が実行された場合
+にも状態遷移が行われます。これらの処理は「 `故障検出`_ 」と同様に
+hubモジュールの ``hub.Event`` と ``hub.Timeout`` を用いて実現しています。
 
 
 .. rst-class:: sourcecode
@@ -1293,7 +1375,7 @@ hubモジュールのhub.Eventとhub.Timeoutを用いて実現しています。
 """""""""""""""""""
 
 「 :ref:`ch_link_aggregation` 」と同様にSTPライブラリを利用するため
-CONTEXT登録します。
+CONTEXTを登録します。
 
 
 .. rst-class:: sourcecode
@@ -1314,7 +1396,7 @@ CONTEXT登録します。
 コンフィグ設定
 """"""""""""""
 
-STPライブラリのset_config()メソッドを用いてコンフィグ設定を行います。
+STPライブラリの ``set_config()`` メソッドを用いてコンフィグ設定を行います。
 ここではサンプルとして、以下の値を設定します。
 
 ===================== =============== ======
@@ -1361,9 +1443,9 @@ STPイベント処理
 
 
 
-* STPライブラリで定義されたEventPacketInイベントを利用することで、BPDUパケットを
-  除いたパケットを受信することが出来るため、「 :ref:`ch_switching_hub` 」と同様の
-  ハンドリンクを行います。
+STPライブラリで定義された ``stplib.EventPacketIn`` イベントを利用することで、
+BPDUパケットを除いたパケットを受信することが出来るため、
+「 :ref:`ch_switching_hub` 」と同様のパケットハンドリンクを行います。
 
     .. rst-class:: sourcecode
 
@@ -1377,8 +1459,8 @@ STPイベント処理
                 # ...
 
 
-* ネットワークトポロジの変更通知イベントを受け取り、学習したMACアドレスおよび
-  登録済みのフローエントリを初期化しています。
+ネットワークトポロジの変更通知イベント( ``stplib.EventTopologyChange`` )を
+受け取り、学習したMACアドレスおよび登録済みのフローエントリを初期化しています。
 
 
     .. rst-class:: sourcecode
@@ -1413,8 +1495,8 @@ STPイベント処理
                     del self.mac_to_port[dp.id]
 
 
-* ポート状態の変更通知イベントを受け取り、ポート状態のデバッグログ出力を
-  行っています。
+ポート状態の変更通知イベント( ``stplib.EventPortStateChange`` )を受け取り、
+ポート状態のデバッグログ出力を行っています。
 
     .. rst-class:: sourcecode
 
